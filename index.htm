@@ -1,168 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-	<head>
-		<title>VHS Dubbing</title>
-		<meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+	<title>VHS Dubbing</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 
-		<link rel="apple-touch-icon" sizes="57x57" href="/assets/icon/apple-icon-57x57.png">
-		<link rel="apple-touch-icon" sizes="60x60" href="/assets/icon/apple-icon-60x60.png">
-		<link rel="apple-touch-icon" sizes="72x72" href="/assets/icon/apple-icon-72x72.png">
-		<link rel="apple-touch-icon" sizes="76x76" href="/assets/icon/apple-icon-76x76.png">
-		<link rel="apple-touch-icon" sizes="114x114" href="/assets/icon/apple-icon-114x114.png">
-		<link rel="apple-touch-icon" sizes="120x120" href="/assets/icon/apple-icon-120x120.png">
-		<link rel="apple-touch-icon" sizes="144x144" href="/assets/icon/apple-icon-144x144.png">
-		<link rel="apple-touch-icon" sizes="152x152" href="/assets/icon/apple-icon-152x152.png">
-		<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon/apple-icon-180x180.png">
-		<link rel="icon" type="image/png" sizes="192x192"  href="/assets/icon/android-icon-192x192.png">
-		<link rel="icon" type="image/png" sizes="32x32" href="/assets/icon/favicon-32x32.png">
-		<link rel="icon" type="image/png" sizes="96x96" href="/assets/icon/favicon-96x96.png">
-		<link rel="icon" type="image/png" sizes="16x16" href="/assets/icon/favicon-16x16.png">
-		<link rel="manifest" href="/assets/icon/manifest.json">
-		<meta name="msapplication-TileColor" content="#333">
-		<meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
-		<meta name="theme-color" content="#333">
+	<link rel="apple-touch-icon" sizes="57x57" href="/assets/icon/apple-icon-57x57.png">
+	<link rel="apple-touch-icon" sizes="60x60" href="/assets/icon/apple-icon-60x60.png">
+	<link rel="apple-touch-icon" sizes="72x72" href="/assets/icon/apple-icon-72x72.png">
+	<link rel="apple-touch-icon" sizes="76x76" href="/assets/icon/apple-icon-76x76.png">
+	<link rel="apple-touch-icon" sizes="114x114" href="/assets/icon/apple-icon-114x114.png">
+	<link rel="apple-touch-icon" sizes="120x120" href="/assets/icon/apple-icon-120x120.png">
+	<link rel="apple-touch-icon" sizes="144x144" href="/assets/icon/apple-icon-144x144.png">
+	<link rel="apple-touch-icon" sizes="152x152" href="/assets/icon/apple-icon-152x152.png">
+	<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon/apple-icon-180x180.png">
+	<link rel="icon" type="image/png" sizes="192x192"  href="/assets/icon/android-icon-192x192.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/assets/icon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="96x96" href="/assets/icon/favicon-96x96.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="/assets/icon/favicon-16x16.png">
+	<link rel="manifest" href="/assets/icon/manifest.json">
+	<meta name="msapplication-TileColor" content="#333">
+	<meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+	<meta name="theme-color" content="#333">
 
-		<style type="text/css">
-			body {
-				display: flex;
-				min-height: 100vh;
-				margin: 0;
-				overflow: hidden;
-				background: #111;
-				justify-content: center;
-				font-family: sans-serif;
-			}
+	<link rel="stylesheet" type="text/css" href="assets/style.css">
+</head>
+<body>
+	<div class="video-container">
+		<div class="video-wrapper" id="video_wrapper">
+			<video id="video" class="muted" muted src="/hls/stream.m3u8"></video>
 
-			video {
-				display: block;
-				max-width: 100%;
-				max-height: 100vh;
-			}
+			<div class="unmute-message" id="unmute_message">
+				<span>Tap video to unmute</span>
+			</div>
 
-			.video_container {
-				position: relative;
-				text-align: center;
-			}
+			<div class="loader"></div>
+		</div>
 
-			.unmute-message {
-				display: block;
-				position: absolute;
-				top: 20px;
-				left: 0;
-				right: 0;
-				margin: auto;
-			}
+		<div class="playback-data">
+			<div class="playback-data__header">
+				<div class="recorder-state" id="recorder_state">
+					<div class="recorder-state__idle">Stopped</div>
+					<div class="recorder-state__stopping">Stopping...</div>
+					<div class="recorder-state__preview">Signal Preview</div>
+					<div class="recorder-state__recording">Recording</div>
+				</div>
 
-			.unmute-message span {
-				display: inline-block;
-				padding: 10px;
-				background: rgba(0, 0, 0, 0.8);
-				color: #FFF;
-				font-weight: bold;
-				cursor: pointer;
-				border-radius: 5px;
-			}
-		</style>
+				<div class="playback-data__controls" id="video_controls" style="display: none">
+					<!-- <button class="btn-control btn-resume-live" id="resume_live"><span>Resume Live</span></button> -->
+					<!-- <button class="btn-control btn-seek-back" id="seek_back"><span>5</span></button> -->
+					<button class="btn-control btn-fullscreen" id="fullscreen"></button>
+				</div>
+			</div>
 
-		<script src="assets/hls.min.js"></script>
-	</head>
-	<body>
-		<div class="video_container">
-			<video id="video" muted controls src="/hls/stream.m3u8"></video>
-			<div class="unmute-message">
-				<span>Click video to unmute</span>
+			<div id="ffmpeg_data" class="playback-data__list-container">
+				<div class="playback-data__list">
+					<div class="playback-data__item">
+						<span class="title">Frame</span> <span id="meta_frame"></span>
+					</div>
+
+					<div class="playback-data__item">
+						<span class="title">Time</span> <span id="meta_time"></span>
+					</div>
+				</div>
+				<div class="playback-data__list">
+					<div class="playback-data__item">
+						<span class="title">Size</span> <span id="meta_size"></span>
+					</div>
+
+					<div class="playback-data__item">
+						<span class="title">Bitrate</span> <span id="meta_bitrate"></span>
+					</div>
+				</div>
 			</div>
 		</div>
-    </div>
+	</div>
+</div>
 
-    <script type="text/javascript">
-    	// Hide native nav on mobile
-    	document.body.scrollTop = 1;
+<script src="assets/hls.min.js"></script>
+<script src="assets/controller.js"></script>
 
-    	var url = '/hls/stream.m3u8';
-    	var element = document.getElementById('video');
-    	var player;
-
-    	function handleUnmute(e) {
-			e.preventDefault();
-
-    		element.muted = false;
-    		document.querySelector('.unmute-message').style.display = 'none';
-
-			element.removeEventListener('click', handleUnmute);
-    	}
-
-    	element.addEventListener('click', handleUnmute);
-
-    	function start()  {
-    		stop();
-
-	        if (Hls.isSupported()) {
-	        	player = new Hls();
-	        	player.attachMedia(element);
-	        	player.on(Hls.Events.MEDIA_ATTACHED, function() {
-	        		console.log('bound hls to DOM element');
-	        		player.loadSource(url);
-	        		player.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-	        			console.log('manifest loaded with ' + data.levels.length + ' quality level(s)');
-	        			element.muted = true;
-	        			element.play();
-	        		});
-	        	});
-	        	player.on(Hls.Events.ERROR, function (event, data) {
-	        		var errorType = data.type;
-	        		var errorDetails = data.details;
-	        		var errorFatal = data.fatal;
-
-	        		switch(data.details) {
-	        			case Hls.ErrorDetails.FRAG_LOAD_ERROR:
-	        			console.error('error: FRAG_LOAD_ERROR');
-	        			break;
-	        			case Hls.ErrorDetails.MEDIA_ERROR:
-	        			console.error('error: MEDIA_ERROR');
-	        			break;
-	        			case Hls.ErrorDetails.OTHER_ERROR:
-	        			console.error('error" OTHER_ERROR');
-	        			break;
-	        			default:
-	        			console.error('default error:??')
-	        			break;
-	        		}
-	        	});
-	        }
-			// hls.js is not supported on platforms that do not have Media Source
-			// Extensions (MSE) enabled.
-			//
-			// When the browser has built-in HLS support (check using `canPlayType`),
-			// we can provide an HLS manifest (i.e. .m3u8 URL) directly to the video
-			// element through the `src` property. This is using the built-in support
-			// of the plain video element, without using hls.js.
-			//
-			// Note: it would be more normal to wait on the 'canplay' event below however
-			// on Safari (where you are most likely to find built-in HLS support) the
-			// video.src URL must be on the user-driven white-list before a 'canplay'
-			// event will be emitted; the last video event that can be reliably
-			// listened-for when the URL is not on the white-list is 'loadedmetadata'.
-	        else if (element.canPlayType('application/vnd.apple.mpegurl') !== '') {
-	        	element.src = url;
-	        	element.addEventListener('loadedmetadata', function() {
-	        		element.play();
-	        	});
-	        } else {
-	        	throw new Error('hls not supported');
-	        }
-	    };
-
-	    function stop() {
-	    	if (element) {
-	    		element.pause();
-	    	}
-	    };
-
-	    document.addEventListener("DOMContentLoaded", function() {
-	    	start();
-	    });
-	</script>
-
-	</body>
+</body>
 </html>
