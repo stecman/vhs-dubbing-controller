@@ -24,7 +24,7 @@
 
 	<link rel="stylesheet" type="text/css" href="assets/style.css">
 </head>
-<body>
+<body id="recorder_state">
 	<div class="video-container">
 		<div class="video-wrapper" id="video_wrapper">
 			<video id="video" class="muted" muted src="/hls/stream.m3u8"></video>
@@ -38,7 +38,7 @@
 
 		<div class="playback-data">
 			<div class="playback-data__header">
-				<div class="recorder-state" id="recorder_state">
+				<div class="recorder-state">
 					<div class="recorder-state__idle">Stopped</div>
 					<div class="recorder-state__stopping">Stopping...</div>
 					<div class="recorder-state__preview">Signal Preview</div>
@@ -72,12 +72,117 @@
 					</div>
 				</div>
 			</div>
+
+			<div class="help help--starting">
+				<h2>Hello there!</h2>
+				<p>This is an interactive guide for dubbing tapes. If you're not sure what's being described at any point, click links to see images.</p>
+
+				<h3>Powering up</h3>
+				<p>You only need to perform these steps if equipment was turned off, or if you're not getting a signal in the preview above.</p>
+
+				<ol start="1">
+					<li>Ensure the VHS player is turned on (<a target="_blank" href="assets/help/vhs-player-power.jpg">guide</a>). This can also be done from the <a target="_blank" href="assets/help/vhs-remote.jpg">VHS remote</a></li>
+					<li>Ensure the HDD recorder is turned on (<a target="_blank" href="assets/help/hdd-recorder-power.jpg">guide</a>)
+					<li>If there is a <a target="_blank" href="assets/help/hdd-recorder-space-warning.jpg">purple HELP overlay</a> on the TV or preview signal above, press <a target="_blank" href="assets/help/hdd-remote.jpg">ENTER on the HDD recorder remote</a> to clear it.</li>
+				</ol>
+
+				<h3>Dubbing</h3>
+
+				<ol start="1">
+					<li>
+						<a target="_blank" href="assets/help/vhs-player-power.jpg">Eject</a> any existing tape in the VHS player.
+						<a target="_blank" href="assets/help/vhs-archive-number.jpg">Mark the old tape with its "archive number"</a> before putting it away (the current number is <strong data-archive-number></strong>)
+					</li>
+					<li>For each new tape, the archive number needs to be incremented. You'll need to press the "New Tape" button below to increment the number. If the button is grey, the number has already been incremented.</li>
+				</ol>
+			</div>
 		</div>
 	</div>
-</div>
 
-<script src="assets/hls.min.js"></script>
-<script src="assets/controller.js"></script>
+	<div class="recorder-setup">
+		<div class="section section--divided">
+			<div class="section__divide">
+				<div style="width: 100%">
+					<span class="section-label">Archive Number</span>
+					<div class="tape-number-control">
+						<span class="tape-number" data-archive-number></span>
+					</div>
+				</div>
+				<div style="width: 100%; text-align: center">
+					<button class="btn btn-green" id="button_new_tape" disabled>New Tape</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="help help--starting">
+			<ol start="3">
+				<li>Pick a tape that hasn't been dubbed yet. Tapes Stephen has dubbed have a pink strip of paper. You may want to use a similar system to easily identify your done tapes.</li>
+				<li>Put your selected tape in the VHS player. Press stop on the <a target="_blank" href="assets/help/vhs-remote.jpg">VHS remote</a> if the tape <a target="_blank" href="assets/help/vhs-playing.jpg">automatically plays.</a></li>
+				<li>Rewind to the start of the tape.</li>
+				<li>Press the "Reset Counter" button on the <a target="_blank" href="assets/help/vhs-remote.jpg">VHS remote</a> when rewinding has finished.</li>
+				<li>Fast-forward to the end of the tape and press stop on the <a target="_blank" href="assets/help/vhs-remote.jpg">VHS remote</a> when the end of the tape is reached (fairly obvious clunk sound). The player will try to rewind again if you don't press stop, so you need to wait around a few minutes for this.</li>
+				<li>Look at the <a target="_blank" href="assets/help/vhs-duration.jpg">duration shown on the VHS player</a> when stopped. Enter the that time below with a few minutes added (like you're entering time on a microwave).</li>
+			</ol>
+		</div>
+
+		<div class="section">
+			<span class="section-label">Recording Length<br/>(tap to edit)</span>
+			<form class="duration-control">
+				<input type="tel" pattern="\d*" name="year" size="3" id="duration_input" maxlength="4">
+				<span class="duration-control__masked" id="duration_output"></span>
+			</form>
+		</div>
+
+		<div class="help">
+			<ol start="9">
+				<li>Rewind to the start of the tape</li>
+				<li>Press the "Start Recording" button below, then start the tape playing in the VHS player.</li>
+			</ol>
+		</div>
+
+		<div class="section">
+			<button class="btn btn-blue btn-block" id="button_record">Start Recording</button>
+		</div>
+	</div>
+
+	<div class="recorder-running">
+		<div class="section section--divided">
+			<div class="section__divide">
+				<div style="width: 100%">
+					<span class="section-label">Archive Number</span>
+					<div class="section-value" data-archive-number></div>
+				</div>
+				<div style="width: 100%;">
+					<span class="section-label">Recording Length</span>
+					<div class="section-value" id="duration_display_readonly"></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="help help--running">
+			<h2>We're recording now!</h2>
+			<p>Start the tape playing if you haven't done so yet.</p>
+			<p>You should see a video player above and hear sound. The stream is 2-3 seconds behind real-time, but it's an accurate representation of what's being recorded. If it sounds or looks bad, that's the signal we're getting.</p>
+			<p>The recording will automatically stop when the configured time runs out.</p>
+			<p>If something is wrong, you can also stop the recording with the red button below (it confirms you want to, so don't worry about accidentally pressing it).</p>
+		</div>
+
+		<div class="section">
+			<button class="btn btn-red btn-block" id="button_stop_recording">Stop Recording</button>
+		</div>
+	</div>
+
+	<div class="websocket-failure" style="display: none" id="ws-failure">
+		<h2>Lost contact with the server</h2>
+		<p>Reload the page to re-connect.</p>
+		<button class="btn btn-blue" onclick="window.location.reload()">Reload Page</button>
+	</div>
+
+	<a href="#" class="help-link" id="help_link">Help! What do I do?</a>
+	<p><a href="#" class="help-link" id="help_close_link">Click here exit help mode</a></p>
+
+	<script src="assets/hls.min.js"></script>
+	<script src="assets/controller.js"></script>
 
 </body>
 </html>

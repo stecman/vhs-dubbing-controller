@@ -12,9 +12,12 @@ if os.name == 'nt':
 else:
     FFMPEG = 'ffmpeg'
 
-cmd_capture = [
+cmd_base = [
     FFMPEG,
-    '-y',
+    '-y', # Overwrite output without asking. We'll handle this Python
+]
+
+cmd_capture = [
     '-f', 'dshow',
     '-video_size', '720x576',
     '-pixel_format', 'uyvy422',
@@ -23,13 +26,18 @@ cmd_capture = [
     '-i', 'video=Decklink Video Capture:audio=Decklink Audio Capture',
 ]
 
-cmd_fake = [
-    FFMPEG, '-re', '-i', os.getenv('FAKE_STREAM')
+cmd_fake_capture = [
+    '-re', '-i', os.getenv('FAKE_STREAM')
 ]
 
-args_common = [
-    '-loglevel', 'repeat+info',
-]
+# cmd_fake_capture = [
+#     FFMPEG,
+#     '-y', # Overwrite output without asking. We'll handle this Python
+#     '-f', 'v4l2',
+#     '-framerate', '25',
+#     '-video_size', '1280x720',
+#     '-i', '/dev/video0',
+# ]
 
 args_save_ffv1 = [
     '-codec:v', 'ffv1',
@@ -48,7 +56,7 @@ args_save_ffv1 = [
 
 args_hls = [
     '-preset', 'ultrafast', '-vcodec', 'libx264', '-tune', 'zerolatency', '-flags', '+cgop', '-g', '50', '-b:v', '5700k',
-    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-strict', '2',
+    '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-strict', '2',
     '-movflags', '+faststart',
     '-f', 'hls',
     '-hls_time', '1',
@@ -74,14 +82,12 @@ RE_MODULE_OUTPUT = r'^\[(.*?) @ (0x[0-9a-fA-F]+)\] (.*)'
 RE_INFO_LINE_DETECT = r'^frame= *([0-9]+) ?'
 RE_INFO_LINE = r'([a-zA-z]+)=\s*([^ ]+)(?: |$)'
 
-def non_block_read(output):
-    # fd = output.fileno()
-    # fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-    # fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-    try:
-        return output.read(1)
-    except:
-        return ""
+def format_num_bytes(num, suffix='B'):
+    for unit in ['','K','M','G','T','P','E','Z']:
+        if abs(num) < 1024.0:
+            return "%3.2f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.2f%s%s" % (num, 'Y', suffix)
 
 class Recorder:
 
@@ -90,12 +96,18 @@ class Recorder:
     @staticmethod
     def instance():
         if Recorder.__instance is None:
-            Recorder.__instance = Recorder()
+            raise Exception("No instance set. Pass a Recorder instance to set_instance()")
 
         return Recorder.__instance
 
-    def __init__(self):
-        self.hls_path = None
+    @staticmethod
+    def set_instance(recorder):
+        Recorder.__instance = recorder
+
+    def __init__(self, hls_path, file_manager):
+        self.hls_path = hls_path
+        self.file_manager = file_manager
+
         self.fake = False
 
         # Recorder state
@@ -104,6 +116,7 @@ class Recorder:
 
         # FFMPEG state
         self._ffmpeg_output = None
+        self._duration_secs = 0
 
         # HLS Stream state
         self._stream_ready = False
@@ -113,22 +126,28 @@ class Recorder:
         # This is used for pushing events back into the main thread
         self._main_loop = asyncio.get_event_loop()
 
-    def subscribe(self, event):
-        self.subscriptions.add(event)
+    def subscribe(self, queue):
+        self.subscriptions.add(queue)
 
-    def unsubscribe(self, event):
-        self.subscriptions.remove(event)
+    def unsubscribe(self, queue):
+        self.subscriptions.remove(queue)
 
     def getState(self):
         return {
             "recorder": self.state,
             "ffmpeg": self._ffmpeg_output,
             "streamReady": self._stream_ready,
+            "duration": self._duration_secs
         }
 
-    def start_preview(self):
-        print("start_preview called")
+    def set_duration(self, seconds):
+        if self.state not in [STATE_RECORDING, STATE_STARTING_RECORDING]:
+            self._duration_secs = seconds
 
+    def start_preview(self):
+        """
+        Start a preview HLS output stream, but don't save anything to file
+        """
         # Only permit starting preview from idle
         if self.state != STATE_IDLE:
             return False
@@ -138,13 +157,17 @@ class Recorder:
 
         self.prepareHls()
 
-        if self.fake:
-            cmd = cmd_fake[:]
-        else:
-            cmd = cmd_capture[:]
+        cmd = cmd_base[:]
 
+        if self.fake:
+            cmd.extend(cmd_fake_capture)
+        else:
+            cmd.extend(cmd_capture)
+
+        # Filter for streamed output
         cmd.extend(self.getHlsFilter(is_preview=True))
 
+        # Stream as HLS
         cmd.extend(args_hls)
         cmd.append(self.getStreamFilename())
 
@@ -157,19 +180,66 @@ class Recorder:
 
         return True
 
-    def emitState(self):
-        """ Thread-safe emit state changed signal """
+    def start_recording(self):
+        """
+        Start a video capture to file and an generate an HLS output stream for monitoring
+        """
+        if self.state == STATE_RECORDING or self.state == STATE_STARTING_RECORDING:
+            # Already recording or starting to record
+            return False
 
-        # Assume the main thread owns the asyncio loop
-        if threading.main_thread() == threading.currentThread():
-            self._emitState()
+        if self.state != STATE_IDLE:
+            # Wait for preview to start before we can stop it
+            while self.state == STATE_STARTING_PREVIEW:
+                time.sleep(0.1)
+
+            if self.state == STATE_PREVIEWING:
+                self.state = STATE_STOPPING
+                self.emitState()
+
+            while self.state == STATE_STOPPING:
+                time.sleep(0.1)
+
+        self.state = STATE_STARTING_RECORDING
+        self.emitState()
+
+        self.prepareHls()
+
+        cmd = cmd_base[:]
+
+        # Limit capture to specified length
+        # This is always required as we don't want to accidentally be left recording indefinitely
+        cmd.extend(['-t', str(self._duration_secs)])
+
+        if self.fake:
+            cmd.extend(cmd_fake_capture)
         else:
-            self._main_loop.call_soon_threadsafe(self._emitState)
+            cmd.extend(cmd_capture)
 
-    def _emitState(self):
-        """ Actually emit state changed signal (must be called on the main thread) """
-        for async_event in self.subscriptions:
-            async_event.set()
+        # Save archive copy
+        output_file = self.file_manager.new_recording_path()
+
+        cmd.extend(args_save_ffv1)
+        cmd.append(output_file)
+
+        # Filter for streamed output
+        cmd.extend(self.getHlsFilter())
+
+        # Stream as HLS
+        # This needs the time specified as well so it stops when the recording does
+        cmd.extend(args_hls)
+        cmd.append(self.getStreamFilename())
+
+        print(' '.join(cmd))
+
+        self._thread = threading.Thread(
+            name="ffmpeg-preview",
+            target=self._execute,
+            args=(cmd, STATE_RECORDING)
+        )
+        self._thread.start()
+
+        return True
 
     def stop_preview(self):
         print("stop_preview called")
@@ -182,7 +252,34 @@ class Recorder:
             self.state = STATE_STOPPING
             self.emitState()
 
+    def emitState(self):
+        """
+        Thread-safe emit state changed signal
+        """
+
+        # Assume the main thread owns the asyncio loop
+        if threading.main_thread() == threading.currentThread():
+            self._emitState()
+        else:
+            self._main_loop.call_soon_threadsafe(self._emitState)
+
+    def _emitState(self):
+        """
+        Actually emit state changed signal (must be called on the main thread)
+        """
+        state = self.getState()
+
+        for async_queue in self.subscriptions:
+            async_queue.put_nowait(state)
+
     def handleFrameInfo(self, info):
+
+        if 'size' in info:
+            if info['size'] != 'N/A':
+                number = re.sub(r'[^0-9]+', '', info['size'])
+                if number:
+                    info['size'] = format_num_bytes(int(number) * 1024)
+
         self._ffmpeg_output = info
         self.emitState()
 
@@ -191,12 +288,11 @@ class Recorder:
             if self._stream_ready == False:
                 if 'm3u8' in output:
                     self._stream_ready = True
-            
+            #
             # Capture message to avoid these being logged
             return True
 
         return False
-
 
 
     def _execute(self, cmd, newState):
@@ -217,7 +313,7 @@ class Recorder:
                 stop_signal_sent = True
 
             # Stream ffmpeg output in from stdout
-            byte = non_block_read(process.stdout)
+            byte = process.stdout.read(1)
             if byte:
                 buf += byte.decode('ascii')
 
@@ -286,19 +382,19 @@ class Recorder:
                 'boxborderw=10',
             ]))
 
-            # Draw timecode in the bottom right
-            filters.append(':'.join([
-                r'drawtext=text=%{pts\\:hms}',
-                # 'x=((w-tw)/2)',
-                'x=(w-tw-20)',
-                'y=h-(2*lh) - 5',
-                'font=Mono',
-                'shadowx=2',
-                'shadowy=2',
-                'fontcolor=white',
-                'fontsize=26',
-                'boxborderw=10',
-            ]))
+            # # Draw timecode in the bottom right
+            # filters.append(':'.join([
+            #     r'drawtext=text=%{pts\\:hms}',
+            #     # 'x=((w-tw)/2)',
+            #     'x=(w-tw-20)',
+            #     'y=h-(2*lh) - 5',
+            #     'font=Mono',
+            #     'shadowx=2',
+            #     'shadowy=2',
+            #     'fontcolor=white',
+            #     'fontsize=26',
+            #     'boxborderw=10',
+            # ]))
 
         return ['-vf', ','.join(filters)]
 

@@ -8,6 +8,11 @@ function toggleMute() {
     element.classList.toggle('muted');
 }
 
+function unmute() {
+    element.muted = false;
+    element.classList.remove('muted');
+}
+
 function toggleFullscreen() {
     if (element.requestFullscreen) {
         element.requestFullscreen()
@@ -32,6 +37,38 @@ function seekToLive() {
     element.currentTime = element.duration - 0.5;
     player._isLive = true;
     document.getElementById('video_controls').classList.add('live');
+}
+
+function abortRecording() {
+    const reallyStop = prompt('Really stop this recording?\n\nPlease only do this if something has gone wrong and you have stopped the tape to intervene. The recording will be kept.\n\nType \'stop\' below to confirm');
+
+    if (reallyStop && reallyStop.trim().toLowerCase() == 'stop') {
+        ws.send('stop');
+    }
+}
+
+function startRecording() {
+    const durationSeconds = durationManager.getDuration();
+
+    if (durationSeconds < 1) {
+        alert('Please enter a valid duration');
+        document.getElementById('duration_input').focus();
+        return;
+    }
+
+    ws.send('record:' + durationSeconds);
+
+    // Turn off mute to encourage monitoring audio
+    unmute();
+}
+
+function incrementTape() {
+    ws.send('increment');
+}
+
+function toggleHelpMode(e) {
+    e.preventDefault();
+    document.body.classList.toggle('help-mode');
 }
 
 function VideoTouchControl(node) {
@@ -102,7 +139,7 @@ const touchControls = new VideoTouchControl(element);
 touchControls.singleTap(toggleMute);
 touchControls.doubleTap(toggleFullscreen);
 
-// Bind Controls
+// Bind video controls
 document.getElementById('unmute_message').addEventListener('touchstart', toggleMute);
 document.getElementById('fullscreen').addEventListener('click', toggleFullscreen);
 
@@ -112,6 +149,138 @@ document.getElementById('fullscreen').addEventListener('click', toggleFullscreen
 // document.getElementById('seek_back').addEventListener('click', seekBackwards);
 // document.getElementById('resume_live').addEventListener('click', seekToLive);
 
+// Bind other buttons
+document.getElementById('button_new_tape').addEventListener('click', incrementTape);
+document.getElementById('button_stop_recording').addEventListener('click', abortRecording);
+document.getElementById('button_record').addEventListener('click', startRecording);
+
+document.getElementById('help_link').addEventListener('click', toggleHelpMode);
+document.getElementById('help_close_link').addEventListener('click', toggleHelpMode);
+
+// Set up masked input for easy duration entry
+const durationManager = (function(){
+    var durationSeconds = 0;
+
+    const inputNode = document.getElementById('duration_input');
+    const outputNode = document.getElementById('duration_output');
+
+    var lastValue = null;
+
+    function handleUpdate(e) {
+        const raw = inputNode.value.toString()
+            .replace(/[^0-9]*/g, '') // Only permit numerals
+            .replace(/^0+/, ''); // Avoid the user adding leading zeros (fills the field silently)
+
+        // Drop any non-numeric characters that got into the input
+        if (raw !== inputNode.value.toString()) {
+            inputNode.value = raw;
+        }
+
+        // Only handle when the value has changed
+        if (lastValue == raw) {
+            return;
+        } else {
+            lastValue = raw;
+        }
+
+        // Block having more than four digits
+        if (raw.length > 4 && e) {
+            e.preventDefault();
+            e.stopPropagation();
+            inputNode.value = raw.substr(0, 4);
+            return false;
+        }
+
+        // Collect groups of two digits from the right-hand side
+        // The smallest unit is always first in the output list (so, [MM, H] or [M] or [MM] etc)
+        var parts = [];
+
+        for (var i = 0; i < raw.length; i += 2) {
+            // Factor for substr returning at index 0 when passed an negative index past the start of the string
+            const length = Math.min(raw.length - i, 2);
+            parts.push(raw.substr((-i)-2, length));
+        }
+
+        const suffixes = ['m', 'h'];
+        const secondMultipliers = [60, 60*60];
+
+        var output = [];
+
+        durationSeconds = 0;
+
+        for (var i = 0; i < suffixes.length; i++) {
+            output.push('<span class="duration-control__suffix">' + suffixes[i] + '</span>');
+
+            if (parts[i]) {
+                output.push(parts[i]);
+
+                if (parts[i].length === 1) {
+                    output.push('0');
+                }
+
+                durationSeconds += secondMultipliers[i] * parseInt(parts[i]);
+
+            } else {
+                output.push('00');
+            }
+
+            if (i < (suffixes.length - 1)) {
+                output.push('<span> ');
+            }
+        }
+
+        outputNode.innerHTML = output.reverse().join('');
+    }
+
+    function handleFocus(e) {
+        outputNode.classList.add('focused');
+        handleUpdate();
+    }
+
+    function handleBlur(e) {
+        outputNode.classList.remove('focused');
+    }
+
+    function handleSubmit(e) {
+        e.preventDefault();
+        inputNode.blur();
+    }
+
+    function setDuration(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        seconds -= (hours * 3600);
+
+        console.log(hours)
+
+        const minutes = Math.floor(seconds / 60);
+        seconds -= minutes * 60;
+
+        console.log(minutes)
+
+        durationSeconds = seconds;
+        inputNode.value = hours.toString() + (minutes < 10 ? '0' : '') + minutes.toString();
+        handleUpdate();
+    }
+
+    function getDuration() {
+        return durationSeconds;
+    }
+
+    inputNode.addEventListener('keypress', handleUpdate);
+    inputNode.addEventListener('change', handleUpdate);
+    inputNode.addEventListener('keyup', handleUpdate);
+    inputNode.addEventListener('keydown', handleUpdate);
+    inputNode.addEventListener('focus', handleFocus);
+    inputNode.addEventListener('blur', handleBlur);
+    inputNode.form.addEventListener('submit', handleSubmit);
+    handleUpdate();
+
+    return {
+        setDuration: setDuration,
+        getDuration: getDuration,
+    }
+})();
+
 function start()  {
     element.style.display = 'block';
 
@@ -119,10 +288,8 @@ function start()  {
         player = new Hls();
         player.attachMedia(element);
         player.on(Hls.Events.MEDIA_ATTACHED, function() {
-            console.log('bound hls to DOM element');
             player.loadSource(url);
             player.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-                console.log('manifest loaded with ' + data.levels.length + ' quality level(s)');
                 element.play();
             });
         });
@@ -178,24 +345,23 @@ function start()  {
     }
 };
 
-// Monitor playback distance from live:
-// Adjust the seek if this player is too far behind
-setInterval(function() {
-    if (player === null) {
-        return;
-    }
-
-    if ((element.duration - element.currentTime) > 3) {
-        console.warn('Adjusting playback to live: too far behind');
-
-        element.currentTime = element.duration - 0.5;
-    }
-}, 500);
-
 function stop() {
-    player.destroy();
-    player = null;
-};
+    if (player !== null) {
+        player.destroy();
+        player = null;
+    }
+}
+
+function formatSeconds(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    seconds -= (hours * 3600);
+
+    const minutes = Math.floor(seconds / 60);
+    seconds -= minutes * 60;
+
+    return `${hours}h ${(minutes < 10 ? '0' : '')}${minutes}m`;
+    handleUpdate();
+}
 
 function numberWithCommas(x) {
     return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -204,13 +370,19 @@ function numberWithCommas(x) {
 function updateMetadata(data) {
     const node = document.getElementById('ffmpeg_data');
 
-    if (data) {
-        node.classList.remove('hidden');
+    if ((data.recorder == 'recording' || data.recorder == 'start-recording')) {
+        document.getElementById('duration_display_readonly').innerText = formatSeconds(data.duration);
 
-        document.getElementById('meta_frame').innerText = numberWithCommas(parseInt(data['frame'], 10));
-        document.getElementById('meta_time').innerText = data['time'];
-        document.getElementById('meta_bitrate').innerText = data['bitrate'];
-        document.getElementById('meta_size').innerText = data['size'];
+        if (data.ffmpeg) {
+            node.classList.remove('hidden');
+
+            document.getElementById('meta_frame').innerText = numberWithCommas(parseInt(data.ffmpeg['frame'], 10));
+            document.getElementById('meta_time').innerText = data.ffmpeg['time'];
+            document.getElementById('meta_bitrate').innerText = data.ffmpeg['bitrate'];
+            document.getElementById('meta_size').innerText = data.ffmpeg['size'];
+        } else {
+            node.classList.add('hidden');
+        }
     } else {
         node.classList.add('hidden');
     }
@@ -249,6 +421,7 @@ function updateStatus(data) {
     }
 }
 
+var lastState = null;
 function updatePlayer(data) {
     if (player === null) {
         if (data.recorder == 'preview' || data.recorder == 'recording') {
@@ -257,16 +430,60 @@ function updatePlayer(data) {
             }
         }
     } else {
-        if (data.recorder == 'idle') {
+        if ((!data.streamReady) || data.recorder == 'idle') {
             stop();
         }
+
+        // Automatically start the preview again if a recording finishes while connecte
+        if (data.recorder == 'idle') {
+            ws.send('preview');
+        }
     }
+
+    // Get updated file info at each recorder state change
+    if (lastState != data.recorder) {
+        ws.send('fileinfo');
+    }
+
+    lastState = data.recorder;
+}
+
+function updateFileInfo(data) {
+    const newTapeButton = document.getElementById('button_new_tape');
+    const recordButton = document.getElementById('button_record');
+
+    document.querySelectorAll('[data-archive-number]').forEach(node => {
+        node.innerText = data.tape_number;
+    });
+
+    newTapeButton.disabled = data.recording_count < 1;
+
+    if (newTapeButton.disabled) {
+        recordButton.innerText = 'Start Recording';
+    } else {
+        recordButton.innerHTML = `Start Recording <em>(adding to ${data.tape_number})</em>`;
+    }
+
+    console.log(data);
 }
 
 // Open a websocket to interact with the server
 const ws = new WebSocket(`ws://${window.location.host}/socket`);
 ws.onopen = function() {
-    ws.send("Hello, world");
+    console.log('Connected');
+
+    // Ask the server to send which tape file is active
+    // This info isn't pushed automatically like the video info is
+    ws.send('fileinfo');
+};
+
+ws.onclose = function() {
+    console.log('Disconnected');
+    stop();
+
+    // Show the disconnect overlay
+    // This either means the network changed or the server crashed
+    document.getElementById('ws-failure').style.display = '';
 };
 
 ws.onmessage = function (evt) {
@@ -277,8 +494,12 @@ ws.onmessage = function (evt) {
             recorder_status = msg.data.recorder;
 
             updateStatus(msg.data);
-            updateMetadata(msg.data.ffmpeg);
+            updateMetadata(msg.data);
             updatePlayer(msg.data);
+            break;
+
+        case 'fileinfo':
+            updateFileInfo(msg.data)
             break;
     }
 

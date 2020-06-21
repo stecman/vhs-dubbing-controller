@@ -8,11 +8,10 @@ import json
 import logging
 
 from recorder import Recorder, STATE_IDLE, STATE_PREVIEWING
+from filemanager import FileManager
 
 config = configparser.ConfigParser()
 config.read('server.ini')
-
-HLS_STREAM_PATH = config['stream']['hls_path']
 
 def addNoCacheHeader(handler):
     """
@@ -47,12 +46,12 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
         self.set_nodelay(True)
         ws_client_count += 1
 
-        self.event = asyncio.Event()
+        self.queue = asyncio.Queue()
         recorder = Recorder.instance()
-        recorder.subscribe(self.event)
+        recorder.subscribe(self.queue)
 
         io_loop = tornado.ioloop.IOLoop.current()
-        io_loop.spawn_callback(self.auto_push_state)
+        io_loop.spawn_callback(self.push_video_state)
 
         # Auto-start preview stream if no-one was connected before
         if ws_client_count == 1:
@@ -63,12 +62,35 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
 
         if message == 'stop':
             recorder.stop_preview()
+            recorder.stop_recording()
 
-        if message == 'preview':
+        elif message == 'preview':
             recorder.start_preview()
 
+        elif message.startswith('record'):
+            parts = message.split(':')
+            if len(parts) == 2:
+                cmd, durationSeconds = parts
+                recorder.set_duration( int(durationSeconds) );
+                recorder.start_recording()
+
+        elif message == 'fileinfo':
+            self.write_message(json.dumps({
+                "type": "fileinfo",
+                "data": FileManager.instance().get_state()
+            }))
+
+        elif message == 'increment':
+            FileManager.instance().increment_tape_number()
+
+            self.write_message(json.dumps({
+                "type": "fileinfo",
+                "data": FileManager.instance().get_state()
+            }))
+
+
     def on_close(self):
-        Recorder.instance().unsubscribe(self.event)
+        Recorder.instance().unsubscribe(self.queue)
 
         global ws_client_count
         ws_client_count -= 1
@@ -86,36 +108,50 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
         if ws_client_count == 0:
             recorder.stop_preview()
 
-    async def auto_push_state(self):
+    async def push_video_state(self):
         recorder = Recorder.instance()
+
+        # Push the initial state at connection
+        state = recorder.getState()
 
         while True:
             try:
                 self.write_message(json.dumps({
                     "type": "state",
-                    "data": recorder.getState()
+                    "data": state
                 }))
             except tornado.websocket.WebSocketClosedError as e:
                 # Client has disconnected: stop pushing stream info
                 return
 
-            await self.event.wait()
-            self.event.clear()
+            state = await self.queue.get()
 
 
 def make_app():
     return tornado.web.Application([
         (r'/socket', ControllerWebSocket),
-        (r'/hls/(.*)', StaticFileHandler, {'path': HLS_STREAM_PATH}),
+        (r'/hls/(.*)', StaticFileHandler, {'path': config['stream']['hls_path']}),
         (r'/assets/(.*)', StaticFileHandler, {'path': "assets"}),
         (r"/", MainHandler),
     ], debug=True, autoreload = False)
 
 
 if __name__ == "__main__":
-    recorder = Recorder.instance()
-    recorder.hls_path = HLS_STREAM_PATH
+    file_manager = FileManager(
+        storage_path = config['archive']['storage_path'],
+        db_file = config['archive']['count_file'],
+    )
+
+    recorder = Recorder(
+        hls_path = config['stream']['hls_path'],
+        file_manager = file_manager,
+    )
+
     recorder.fake = True
+
+    # Cheap hack for now to make these available in websockets without being global variables
+    Recorder.set_instance(recorder)
+    FileManager.set_instance(file_manager)
 
     app = make_app()
     app.listen(config['server']['port'])

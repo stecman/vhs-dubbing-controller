@@ -12,11 +12,12 @@ html {
 }
 
 body {
-	min-height: 100vh;
+	/*min-height: 100vh;*/
+	/*overflow: hidden;*/
 	margin: 0;
-	overflow: hidden;
 	font-family: sans-serif;
 	color: #DDD;
+	background: #111;
 	font-size: 16px;
 }
 
@@ -25,7 +26,7 @@ body {
 }
 
 .video-container {
-
+	
 }
 
 .video-wrapper {
@@ -34,18 +35,18 @@ body {
 	margin: auto;
 	background: #383838;
 	max-width: 738px;
-	height: 554px;
 }
 
 @media screen and (max-width: 738px) {
     .video-wrapper {
-        height: 75.06775vw; /* Aspect ratio for 738x554 video */
+        min-height: 75.06775vw; /* Aspect ratio for 738x554 video */
     }
 }
 
 .video-wrapper video {
 	display: block;
 	max-width: 100%;
+	width: 100%;
 	max-height: 100vh;
 	border: none;
 	outline: none;
@@ -87,7 +88,7 @@ body {
 	display: block;
 }
 
-.video-wrapper[data-status="idle"] .loader {
+body[data-status="idle"] .video-wrapper .loader {
 	display: none;
 }
 
@@ -116,7 +117,6 @@ body {
 .playback-data__list-container {
 	padding: 10px 15px;
 	border-bottom: 1px solid #444;
-	margin-bottom: 10px;
 }
 
 .playback-data__list {
@@ -199,12 +199,32 @@ body {
 	border-radius: 1em;
 }
 
-.recorder-state[data-status="idle"] .recorder-state__idle,
-.recorder-state[data-status="stopping"] .recorder-state__stopping,
-.recorder-state[data-status="preview"] .recorder-state__preview,
-.recorder-state[data-status="recording"] .recorder-state__recording {
+body[data-status="idle"] .recorder-state .recorder-state__idle,
+body[data-status="stopping"] .recorder-state .recorder-state__stopping,
+body[data-status="preview"] .recorder-state .recorder-state__preview,
+body[data-status="recording"] .recorder-state .recorder-state__recording {
 	display: block;
 }
+
+.recorder-setup {
+	display: none;
+}
+
+body[data-status="idle"] .recorder-setup,
+body[data-status="starting-preview"] .recorder-setup,
+body[data-status="preview"] .recorder-setup {
+	display: block;
+}
+
+.recorder-running {
+	display: none;
+}
+
+body[data-status="starting-recording"] .recorder-running,
+body[data-status="recording"] .recorder-running {
+	display: block;
+}
+
 
 .playback-data__controls {
 	display: flex;
@@ -300,4 +320,252 @@ body {
 		-webkit-transform: rotate(360deg);
 		transform: rotate(360deg);
 	}
+}
+
+.websocket-failure {
+	position: fixed;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	right: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	flex-direction: column;
+	margin: auto;
+	height: 100vh;
+	width: 100vw;
+	background: #542727e6;
+	color: #FFF;
+	text-align: center;
+}
+
+.websocket-failure h2 {
+	margin: 0 0 0.5em;
+}
+
+
+.websocket-failure p {
+	margin: 0 0 1em;
+}
+
+.btn {
+	padding: 10px;
+	border-radius: 5px;
+	outline: none;
+}
+
+.btn:active {
+	opacity: 0.5;
+}
+
+.btn.btn-blue {
+	border: 2px solid #256c9e;
+	background: #1177bf;
+	color: #FFF;
+}
+
+.btn.btn-green {
+	color: #FFF;
+	background: #12a517;
+	border: 2px solid #1e7321;
+}
+
+.btn.btn-red {
+	color: #FFF;
+	background: #C00;
+	border: 2px solid #ad0000;
+}
+
+.btn-block {
+	display: block;
+	width: 100%;
+}
+
+.btn:disabled {
+	background: grey;
+	border-color: #424242;
+	color: #555;
+}
+
+.section {
+	padding: 10px 15px;
+	border-bottom: 1px solid #444;
+	border-top: 1px solid #444;
+	margin-top: -1px;
+}
+
+.section--divided {
+	padding: 0;
+}
+
+.section__divide {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.section__divide > div {
+	border-right: 1px solid #444;
+	padding: 10px 15px;
+}
+
+.section__divide > div:last-child {
+	border-right: none;
+}
+
+.section-label {
+	display: block;
+	text-align: center;
+	font-size: 11px;
+	font-weight: bold;
+	text-transform: uppercase;
+	color: #999;
+}
+
+.section-value {
+	display: block;
+	font-size: 32px;
+	font-weight: bold;
+	color: #EEE;
+	line-height: 1em;
+	text-align: center;
+	margin-top: 5px;
+}
+
+.form-control label {
+	display: block;
+	font-size: 12px;
+	font-weight: bold;
+	color: #999;
+	margin-bottom: 5px;
+}
+
+.duration-control {
+	display: block;
+	position: relative;
+	max-width: 15em;
+	margin: auto;
+}
+
+.duration-control input {
+	display: block;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	margin: auto;
+	padding: 0;
+	background: none;
+	border: none;
+	color: transparent;
+	line-height: 1em;
+	text-indent: -1000px;
+}
+
+.duration-control .duration-control__masked {
+	display: block;
+	text-align: center;
+	font-size: 50px;
+	font-weight: bold;
+	color: #EEE;
+	line-height: 1em;
+	min-height: 1em;
+}
+
+.duration-control .duration-control__masked.focused {
+	background: #555;
+	border-radius: 10px;
+}
+
+.duration-control .duration-control__suffix {
+	font-size: 40px;
+	line-height: 1em;
+}
+
+.tape-number-control {
+	text-align: center;
+}
+
+.tape-number {
+	display: block;
+	font-size: 50px;
+	font-weight: bold;
+	color: #EEE;
+	line-height: 1em;
+}
+
+.help-link {
+	display: block;
+	margin: 15px 0;
+	color: #b7b7b7;
+	text-align: center;
+	font-size: 14px;
+}
+
+body.help-mode #help_link {
+	display: none;
+}
+
+body #help_close_link {
+	display: none;
+}
+
+body.help-mode #help_close_link {
+	display: block;
+}
+
+.help {
+	display: none;
+	padding: 20px;
+	font-size: 14px;
+}
+
+body.help-mode .help {
+	display: block;
+}
+
+.help h2,
+.help h3 {
+	margin-top: 1.5em;
+	margin-bottom: 0.5em;
+}
+
+.help h2:first-child,
+.help h3:first-child {
+	margin-top: 0;
+}
+
+.help p,
+.help li {
+	margin-bottom: 0.8em;
+	line-height: 1.4em;
+}
+
+.help ul,
+.help ol {
+	margin-left: 20px;
+	margin-bottom: 0.75em;
+ 	line-height: 1.3em;
+}
+
+.help ul:last-child,
+.help ol:last-child,
+.help li:last-child {
+	margin-bottom: 0;
+}
+
+.help a {
+	color: #EEE;
+}
+
+body[data-status="recording"] .help--starting {
+	display: none;
+}
+
+body:not([data-status="recording"]) .help--running {
+	display: none;
 }
