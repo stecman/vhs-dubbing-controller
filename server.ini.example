@@ -1,0 +1,9 @@
+[server]
+port = 8000
+
+[stream]
+hls_path = R:\
+
+[archive]
+storage_path = K:\vhs-test
+count_file = K:\vhs-test\count

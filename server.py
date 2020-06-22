@@ -6,6 +6,7 @@ import asyncio
 import configparser
 import json
 import logging
+import sys
 
 from recorder import Recorder, STATE_IDLE, STATE_PREVIEWING
 from filemanager import FileManager
@@ -137,6 +138,12 @@ def make_app():
 
 
 if __name__ == "__main__":
+
+    # Fix tornado exiting on startup under Windows with Python >=3.8
+    # (https://github.com/tornadoweb/tornado/issues/2751)
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     file_manager = FileManager(
         storage_path = config['archive']['storage_path'],
         db_file = config['archive']['count_file'],

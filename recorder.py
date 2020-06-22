@@ -1,5 +1,4 @@
 import asyncio
-import fcntl
 import os
 import re
 import subprocess
@@ -7,7 +6,7 @@ import sys
 import threading
 import time
 
-if os.name == 'nt':
+if sys.platform == 'win32':
     FFMPEG = 'ffmpeg.exe'
 else:
     FFMPEG = 'ffmpeg'
@@ -78,7 +77,7 @@ STATE_STARTING_RECORDING = 'start-recording'
 STATE_PREVIEWING = 'preview'
 STATE_RECORDING = 'recording'
 
-RE_MODULE_OUTPUT = r'^\[(.*?) @ (0x[0-9a-fA-F]+)\] (.*)'
+RE_MODULE_OUTPUT = r'^\[(.*?) @ ((?:0x)?[0-9a-fA-F]+)\] (.*)'
 RE_INFO_LINE_DETECT = r'^frame= *([0-9]+) ?'
 RE_INFO_LINE = r'([a-zA-z]+)=\s*([^ ]+)(?: |$)'
 
@@ -309,7 +308,7 @@ class Recorder:
         while True:
             if self.state == STATE_STOPPING and not stop_signal_sent:
                 print("Sending stop signal to ffmpeg subprocess...")
-                process.send_signal(subprocess.signal.SIGINT)
+                process.terminate()
                 stop_signal_sent = True
 
             # Stream ffmpeg output in from stdout
@@ -318,7 +317,9 @@ class Recorder:
                 buf += byte.decode('ascii')
 
                 if byte in [b'\r', b'\n']:
-                    self.handleOutput(buf.strip())
+                    line = buf.strip()
+                    if line:
+                        self.handleOutput(line)
                     buf = ''
 
             if process.poll() is not None:
@@ -374,7 +375,7 @@ class Recorder:
                 # 'x=((w-tw)/2)',
                 'x=(20)',
                 'y=h-(2*lh)',
-                'font=Mono',
+                'font=%s' % self._getDrawTextFont(),
                 'fontcolor=black',
                 'fontsize=26',
                 'box=1',
@@ -406,3 +407,12 @@ class Recorder:
             raise Exception('hls_path not set. Unable to stream')
 
         os.makedirs(self.hls_path, mode=0o755, exist_ok=True)
+
+    def _getDrawTextFont(self):
+        """
+        Return a font that's likely to be on this system
+        """
+        if sys.platform == 'win32':
+            return 'Consolas'
+        else:
+            return 'Mono'
