@@ -16,28 +16,6 @@ cmd_base = [
     '-y', # Overwrite output without asking. We'll handle this Python
 ]
 
-cmd_capture = [
-    '-f', 'dshow',
-    '-video_size', '720x576',
-    '-pixel_format', 'uyvy422',
-    '-rtbufsize', '1000M',
-    '-framerate', '25',
-    '-i', 'video=Decklink Video Capture:audio=Decklink Audio Capture',
-]
-
-cmd_fake_capture = [
-    '-re', '-i', os.getenv('FAKE_STREAM')
-]
-
-# cmd_fake_capture = [
-#     FFMPEG,
-#     '-y', # Overwrite output without asking. We'll handle this Python
-#     '-f', 'v4l2',
-#     '-framerate', '25',
-#     '-video_size', '1280x720',
-#     '-i', '/dev/video0',
-# ]
-
 args_save_ffv1 = [
     '-codec:v', 'ffv1',
     '-level', '3',
@@ -103,11 +81,10 @@ class Recorder:
     def set_instance(recorder):
         Recorder.__instance = recorder
 
-    def __init__(self, hls_path, file_manager):
+    def __init__(self, capture_args, hls_path, file_manager):
         self.hls_path = hls_path
         self.file_manager = file_manager
-
-        self.fake = False
+        self.capture_args = capture_args
 
         # Recorder state
         self.state = STATE_IDLE
@@ -158,10 +135,8 @@ class Recorder:
 
         cmd = cmd_base[:]
 
-        if self.fake:
-            cmd.extend(cmd_fake_capture)
-        else:
-            cmd.extend(cmd_capture)
+        # Input stream args
+        cmd.extend(self.capture_args)
 
         # Filter for streamed output
         cmd.extend(self.getHlsFilter(is_preview=True))
@@ -210,10 +185,8 @@ class Recorder:
         # This is always required as we don't want to accidentally be left recording indefinitely
         cmd.extend(['-t', str(self._duration_secs)])
 
-        if self.fake:
-            cmd.extend(cmd_fake_capture)
-        else:
-            cmd.extend(cmd_capture)
+        # Input stream args
+        cmd.extend(self.capture_args)
 
         # Save archive copy
         output_file = self.file_manager.new_recording_path()
@@ -382,20 +355,6 @@ class Recorder:
                 'boxcolor=yellow',
                 'boxborderw=10',
             ]))
-
-            # # Draw timecode in the bottom right
-            # filters.append(':'.join([
-            #     r'drawtext=text=%{pts\\:hms}',
-            #     # 'x=((w-tw)/2)',
-            #     'x=(w-tw-20)',
-            #     'y=h-(2*lh) - 5',
-            #     'font=Mono',
-            #     'shadowx=2',
-            #     'shadowy=2',
-            #     'fontcolor=white',
-            #     'fontsize=26',
-            #     'boxborderw=10',
-            # ]))
 
         return ['-vf', ','.join(filters)]
 

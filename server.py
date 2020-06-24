@@ -8,11 +8,10 @@ import json
 import logging
 import sys
 
-from recorder import Recorder, STATE_IDLE, STATE_PREVIEWING
+from recorder import Recorder
 from filemanager import FileManager
 
-config = configparser.ConfigParser()
-config.read('server.ini')
+import config
 
 def addNoCacheHeader(handler):
     """
@@ -131,7 +130,7 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
 def make_app():
     return tornado.web.Application([
         (r'/socket', ControllerWebSocket),
-        (r'/hls/(.*)', StaticFileHandler, {'path': config['stream']['hls_path']}),
+        (r'/hls/(.*)', StaticFileHandler, {'path': config.hls_path}),
         (r'/assets/(.*)', StaticFileHandler, {'path': "assets"}),
         (r"/", MainHandler),
     ], debug=True, autoreload = False)
@@ -145,23 +144,22 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     file_manager = FileManager(
-        storage_path = config['archive']['storage_path'],
-        db_file = config['archive']['count_file'],
+        storage_path = config.storage_path,
+        db_file = config.count_file,
     )
 
     recorder = Recorder(
-        hls_path = config['stream']['hls_path'],
+        capture_args = config.capture_args,
+        hls_path = config.hls_path,
         file_manager = file_manager,
     )
-
-    recorder.fake = True
 
     # Cheap hack for now to make these available in websockets without being global variables
     Recorder.set_instance(recorder)
     FileManager.set_instance(file_manager)
 
     app = make_app()
-    app.listen(config['server']['port'])
+    app.listen(config.listen_port, config.listen_address)
 
     # Stop file GET requests spamming the log
     # There are a ton of these due to the short GOP of the HLS stream
