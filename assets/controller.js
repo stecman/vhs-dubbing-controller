@@ -2,9 +2,11 @@ var url = '/hls/stream.m3u8';
 var element = document.getElementById('video');
 var player = null;
 
+var autoplay = !window.location.search.includes('novideo');
+var userDidInteract = false;
+
 function toggleMute() {
     element.muted = !element.muted;
-
     element.classList.toggle('muted');
 }
 
@@ -48,6 +50,7 @@ function abortRecording() {
 }
 
 function startRecording() {
+    userDidInteract = true;
     const durationSeconds = durationManager.getDuration();
 
     if (durationSeconds < 1) {
@@ -57,9 +60,6 @@ function startRecording() {
     }
 
     ws.send('record:' + durationSeconds);
-
-    // Turn off mute to encourage monitoring audio
-    unmute();
 }
 
 function incrementTape() {
@@ -425,8 +425,13 @@ var lastState = null;
 function updatePlayer(data) {
     if (player === null) {
         if (data.recorder == 'preview' || data.recorder == 'recording') {
-            if (data.streamReady) {
+            if (data.streamReady && autoplay) {
                 start();
+
+                if (userDidInteract && data.recorder == 'recording') {
+                    // Turn off mute to encourage monitoring audio
+                    unmute();
+                }
             }
         }
     } else {
@@ -461,10 +466,8 @@ function updateFileInfo(data) {
     if (newTapeButton.disabled) {
         recordButton.innerText = 'Start Recording';
     } else {
-        recordButton.innerHTML = `Start Recording <em>(adding to ${data.tape_number})</em>`;
+        recordButton.innerHTML = `Start Another Recording for ${data.tape_number}`;
     }
-
-    console.log(data);
 }
 
 // Open a websocket to interact with the server
