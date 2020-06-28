@@ -59,6 +59,13 @@ function startRecording() {
         return;
     }
 
+    const noteField = document.getElementById('notes_field');
+    if (noteField.value) {
+        ws.send('note:' + noteField.value);
+        noteField.value = '';
+        noteField.style.height = '';
+    }
+
     ws.send('record:' + durationSeconds);
 }
 
@@ -69,6 +76,13 @@ function incrementTape() {
 function toggleHelpMode(e) {
     e.preventDefault();
     document.body.classList.toggle('help-mode');
+}
+
+function resizeNotesField(e) {
+    const node = e.target;
+
+    node.style.height = '';
+    node.style.height = (node.scrollHeight + 4) + 'px';
 }
 
 function VideoTouchControl(node) {
@@ -156,6 +170,10 @@ document.getElementById('button_record').addEventListener('click', startRecordin
 
 document.getElementById('help_link').addEventListener('click', toggleHelpMode);
 document.getElementById('help_close_link').addEventListener('click', toggleHelpMode);
+
+// Auto-adjust the size of the notes field
+document.getElementById('notes_field').addEventListener('input', resizeNotesField);
+document.getElementById('notes_field').addEventListener('change', resizeNotesField);
 
 // Set up masked input for easy duration entry
 const durationManager = (function(){

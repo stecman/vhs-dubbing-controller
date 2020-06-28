@@ -32,6 +32,20 @@ class FileManager:
         self.tape_number += 1
         self._write_count(self.tape_number, self.db_file)
 
+    def save_note(self, text):
+        tape_dirname = self._get_tape_dirname()
+        output_path = os.path.join(self.storage_path, tape_dirname)
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(output_path, "%s_capture_%s.txt" % (tape_dirname, timestamp))
+
+        # Ensure the directory exists to write to
+        os.makedirs(output_path, exist_ok=True)
+
+        # Write note to file
+        with open(output_file, 'a') as note_handle:
+            note_handle.write(text)
+
     def new_recording_path(self):
         tape_dirname = self._get_tape_dirname()
         output_path = os.path.join(self.storage_path, tape_dirname)

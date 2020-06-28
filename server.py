@@ -74,6 +74,16 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
                 recorder.set_duration( int(durationSeconds) );
                 recorder.start_recording()
 
+        elif message.startswith('note:'):
+            parts = message.split(':', maxsplit=1)
+            if len(parts) == 2:
+                cmd, note = parts
+                note = note.strip()
+
+                # Don't save if there's nothing to save
+                if note.strip():
+                    FileManager.instance().save_note(note)
+
         elif message == 'fileinfo':
             self.write_message(json.dumps({
                 "type": "fileinfo",
