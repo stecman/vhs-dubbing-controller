@@ -14,6 +14,7 @@ else:
 cmd_base = [
     FFMPEG,
     '-y', # Overwrite output without asking. We'll handle this Python
+    '-nostdin', # Disallow interactive input on stdin
 ]
 
 args_save_ffv1 = [
@@ -269,7 +270,7 @@ class Recorder:
 
     def _execute(self, cmd, newState):
         stop_signal_sent = False
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
 
         self._m3u8_write_count = 0
         self._stream_ready = False
