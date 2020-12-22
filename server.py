@@ -3,7 +3,6 @@ import tornado.web
 import tornado.websocket
 
 import asyncio
-import configparser
 import json
 import logging
 import sys
@@ -11,13 +10,19 @@ import sys
 from recorder import Recorder
 from filemanager import FileManager
 
-import config
+try:
+    import config
+except ModuleNotFoundError:
+    print("! Failed to import config.py! Have you created it yet?")
+    print("! Get started by copying config.example.py")
+    sys.exit(1)
 
 def addNoCacheHeader(handler):
     """
-    Add headers that all responses should have
+    Decorator to add headers that all responses should have
     """
     handler.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
@@ -27,37 +32,45 @@ class MainHandler(tornado.web.RequestHandler):
 
 class StaticFileHandler(tornado.web.StaticFileHandler):
     """
-    Static file handler that prevents caching
+    Static file handler that prevents the browser caching responses
     """
     def set_extra_headers(self, path):
         if path.endswith(".css") or path.endswith(".js"):
             addNoCacheHeader(self)
 
-ws_client_count = 0
 
 class ControllerWebSocket(tornado.websocket.WebSocketHandler):
     """
-    Web socket server as the primary API for the web page
+    Web socket server used to control state and update client
     """
-    def open(self):
-        global ws_client_count
 
+    # Active client count globally
+    ws_client_count = 0
+
+    def open(self):
+        """
+        Handle new client connections
+        """
         # Send messages as soon as possible
         self.set_nodelay(True)
-        ws_client_count += 1
+        ControllerWebSocket.ws_client_count += 1
 
         self.queue = asyncio.Queue()
         recorder = Recorder.instance()
         recorder.subscribe(self.queue)
 
+        # Spawn async task to push new recorder state to clients
         io_loop = tornado.ioloop.IOLoop.current()
         io_loop.spawn_callback(self.push_video_state)
 
         # Auto-start preview stream if no-one was connected before
-        if ws_client_count == 1:
+        if ControllerWebSocket.ws_client_count == 1:
             recorder.start_preview()
 
     def on_message(self, message):
+        """
+        Handle incoming commands from clients
+        """
         recorder = Recorder.instance()
 
         if message == 'stop':
@@ -98,24 +111,24 @@ class ControllerWebSocket(tornado.websocket.WebSocketHandler):
                 "data": FileManager.instance().get_state()
             }))
 
-
     def on_close(self):
+        """
+        Handle client disconnects
+        """
         Recorder.instance().unsubscribe(self.queue)
 
-        global ws_client_count
-        ws_client_count -= 1
+        ControllerWebSocket.ws_client_count -= 1
 
+        # Stop the preview stream if there are no more clients
         io_loop = tornado.ioloop.IOLoop.current()
         io_loop.spawn_callback(self.auto_close_preview)
 
     async def auto_close_preview(self):
-        global ws_client_count
-
         # Keep the preview running for 5 seconds after the last client disconnects
         # This allows for page refreshing without restarting the preview stream
         await asyncio.sleep(5)
 
-        if ws_client_count == 0:
+        if ControllerWebSocket.ws_client_count == 0:
             recorder.stop_preview()
 
     async def push_video_state(self):

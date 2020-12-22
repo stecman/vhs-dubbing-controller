@@ -13,10 +13,11 @@ else:
 
 cmd_base = [
     FFMPEG,
-    '-y', # Overwrite output without asking. We'll handle this Python
+    '-y', # Overwrite output file without asking. We'll handle this Python
     '-nostdin', # Disallow interactive input on stdin
 ]
 
+# Output stream arguments for capture to file
 args_save_ffv1 = [
     '-codec:v', 'ffv1',
     '-level', '3',
@@ -29,9 +30,10 @@ args_save_ffv1 = [
     '-top', '1',
     '-c:a',
     'copy',
-    # FILENAME
+    # <output-filename>
 ]
 
+# Output stream arguments for HLS preview/monitoring
 args_hls = [
     '-preset', 'ultrafast', '-vcodec', 'libx264', '-tune', 'zerolatency', '-flags', '+cgop', '-g', '50', '-b:v', '5700k',
     '-c:a', 'aac', '-b:a', '320k', '-ar', '48000', '-strict', '2',
@@ -46,7 +48,7 @@ args_hls = [
     '-hls_allow_cache', '0',
     '-start_number', '10',
     '-ignore_io_errors', '1',
-    # FILENAME
+    # <output-filename>
 ]
 
 STATE_IDLE = 'idle'
@@ -68,7 +70,9 @@ def format_num_bytes(num, suffix='B'):
     return "%.2f%s%s" % (num, 'Y', suffix)
 
 class Recorder:
-
+    """
+    Controller that manages FFMPEG processeses in a background thread
+    """
     __instance = None
 
     @staticmethod
@@ -104,9 +108,15 @@ class Recorder:
         self._main_loop = asyncio.get_event_loop()
 
     def subscribe(self, queue):
+        """
+        Subscribe to get callbacks when state changes
+        """
         self.subscriptions.add(queue)
 
     def unsubscribe(self, queue):
+        """
+        Unsubscribe from state change callbacks
+        """
         self.subscriptions.remove(queue)
 
     def getState(self):
@@ -118,6 +128,9 @@ class Recorder:
         }
 
     def set_duration(self, seconds):
+        """
+        Set the capture duration the recording should automatically stop after
+        """
         if self.state not in [STATE_RECORDING, STATE_STARTING_RECORDING]:
             self._duration_secs = seconds
 
@@ -163,15 +176,19 @@ class Recorder:
             # Already recording or starting to record
             return False
 
+        # Preview process is still using the capture device
+        # We need to stop the existing process as only one process can attach to the device at a time
         if self.state != STATE_IDLE:
             # Wait for preview to start before we can stop it
             while self.state == STATE_STARTING_PREVIEW:
                 time.sleep(0.1)
 
+            # Signal the preview process to stop
             if self.state == STATE_PREVIEWING:
                 self.state = STATE_STOPPING
                 self.emitState()
 
+            # Wait for preview to end
             while self.state == STATE_STOPPING:
                 time.sleep(0.1)
 
@@ -215,7 +232,6 @@ class Recorder:
         return True
 
     def stop_preview(self):
-        print("stop_preview called")
         if self.state == STATE_PREVIEWING:
             self.state = STATE_STOPPING
             self.emitState()
@@ -246,7 +262,6 @@ class Recorder:
             async_queue.put_nowait(state)
 
     def handleFrameInfo(self, info):
-
         if 'size' in info:
             if info['size'] != 'N/A':
                 number = re.sub(r'[^0-9]+', '', info['size'])

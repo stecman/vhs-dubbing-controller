@@ -18,11 +18,11 @@ hls_path = "R:\\"
 
 # Base directory for FFV1 MKV recordings
 # Folders will automatically be created in here based on the current archive number.
-storage_path = "K:\\vhs-test"
+storage_path = "K:\\vhs"
 
 # Persisted location of the archive number
 # This is written to when the archive number is incremented (no need for a database)
-count_file = "K:\\vhs-test\\count.txt"
+count_file = "K:\\vhs\\count.txt"
 
 
 #

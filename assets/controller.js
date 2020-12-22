@@ -1,8 +1,9 @@
-var url = '/hls/stream.m3u8';
-var element = document.getElementById('video');
-var player = null;
+const HLS_URL = '/hls/stream.m3u8';
+const AUTOPLAY = !window.location.search.includes('novideo');
 
-var autoplay = !window.location.search.includes('novideo');
+const element = document.getElementById('video');
+
+var player = null;
 var userDidInteract = false;
 
 function toggleMute() {
@@ -306,7 +307,7 @@ function start()  {
         player = new Hls();
         player.attachMedia(element);
         player.on(Hls.Events.MEDIA_ATTACHED, function() {
-            player.loadSource(url);
+            player.loadSource(HLS_URL);
             player.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
                 element.play();
             });
@@ -354,7 +355,7 @@ function start()  {
     // event will be emitted; the last video event that can be reliably
     // listened-for when the URL is not on the white-list is 'loadedmetadata'.
     else if (element.canPlayType('application/vnd.apple.mpegurl') !== '') {
-        element.src = url;
+        element.src = HLS_URL;
         element.addEventListener('loadedmetadata', function() {
             element.play();
         });
@@ -443,7 +444,7 @@ var lastState = null;
 function updatePlayer(data) {
     if (player === null) {
         if (data.recorder == 'preview' || data.recorder == 'recording') {
-            if (data.streamReady && autoplay) {
+            if (data.streamReady && AUTOPLAY) {
                 start();
 
                 if (userDidInteract && data.recorder == 'recording') {
@@ -491,15 +492,12 @@ function updateFileInfo(data) {
 // Open a websocket to interact with the server
 const ws = new WebSocket(`ws://${window.location.host}/socket`);
 ws.onopen = function() {
-    console.log('Connected');
-
     // Ask the server to send which tape file is active
     // This info isn't pushed automatically like the video info is
     ws.send('fileinfo');
 };
 
 ws.onclose = function() {
-    console.log('Disconnected');
     stop();
 
     // Show the disconnect overlay

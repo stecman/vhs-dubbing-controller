@@ -3,6 +3,10 @@ import datetime
 import glob
 
 class FileManager:
+    """
+    Controller for generating and verifying output file paths
+    """
+
     _instance = None
 
     @staticmethod
