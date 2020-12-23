@@ -4,6 +4,8 @@ Web-based control of an ffmpeg video capture, with a live preview in the browser
 
 This is written to capture a PAL 50i signal from a Black Magic Design Intensity Shuttle to lossless FFV1 MKV files, but the capture input is configurable and any ffmpeg input stream should work. Tested on Linux and Windows. My capture was done under Windows as the Intensity Shuttle unfortunately doesn't have a Linux driver.
 
+I don't intend to maintain this project, but hopefully it serves as a useful example or starting point for someone. It's thrown together as simply as possible to get the job done, and has performed its function well.
+
 ![Dubbing screenshot with preview](assets/readme-screenshot.jpg)
 
 ## Requirements
